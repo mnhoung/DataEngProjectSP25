@@ -1,20 +1,34 @@
 from concurrent.futures import TimeoutError
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
+import os
 
 PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
 SERVICE_ACCOUNT_FILE = "/home/pjuyoung/term-project/sp25-cs410-trimet-project-service-account.json"
+OUTPUT_DIR = "/home/pjuyoung/recieved_data/"
 
 # Number of seconds the subscriber should listen for messages
-TIMEOUT = 60.0
+#TIMEOUT = 60.0
 COUNT = 0
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     # print(f"Received {message}.")
     global COUNT
     COUNT += 1
+    message_data = message.data.decode()
+    write_file_message_data)
     message.ack()
+
+def write_file(message):
+    timestamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime('%Y%m%d')
+    filename = os.path.join(OUTPUT_DIR, f"recieved_data_{timestamp}.json")
+
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2)
+
+# Ensure output directory exists
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 pubsub_creds =  (service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE))
 subscriber = pubsub_v1.SubscriberClient(credentials=pubsub_creds)
@@ -28,8 +42,8 @@ with subscriber:
     try:
         # When `TIMEOUT` is not set, result() will block indefinitely,
         # unless an exception is encountered first.
-        streaming_pull_future.result(timeout=TIMEOUT)
-        # streaming_pull_future.result()
+        # streaming_pull_future.result(timeout=TIMEOUT)
+        streaming_pull_future.result()
     except TimeoutError:
         streaming_pull_future.cancel()  # Trigger the shutdown.
         streaming_pull_future.result()  # Block until the shutdown is complete.
