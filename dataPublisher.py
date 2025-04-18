@@ -1,5 +1,8 @@
 from google.cloud import pubsub_v1
 from google.oauth2 import service_account
+from concurrent import futures
+from zoneinfo import ZoneInfo
+from datetime import datetime
 import json
 import os
 
@@ -15,7 +18,7 @@ def future_callback(future):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-# Get a credential object from google.oauth2 using your service account file!!! COOL!
+# Get a credential object from google.oauth2 using your service account file
 pubsub_creds =  (service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE))
 
 # Use that credential object to create your publisher object.
@@ -24,35 +27,36 @@ topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 future_list = []
 count = 0
-for folder in os.listdir(BASE_DIR):
-    folder_path = os.path.join(BASE_DIR, folder)
+timestamp = datetime.now(ZoneInfo("America/Los_Angeles"))
+folder_name = timestamp.strftime("breadcrumb_data_%Y%m%d")
+folder_path = os.path.join(BASE_DIR, folder_name)
 
-    # Only open breadcrumb folders
-    if folder.startswith("breadcrumb_data"):
-        # Loop through the json files
-        for filename in os.listdir(folder_path):
-            if filename.startswith("vehicle") and filename.endswith(".json"):
-                file_path = os.path.join(folder_path, filename)
+# Check if the folder exists
+if os.path.exists(folder_path):
+    # Loop through the json files
+    for filename in os.listdir(folder_path):
+        if filename.startswith("vehicle") and filename.endswith(".json"):
+            file_path = os.path.join(folder_path, filename)
 
-                # Open and dump the file
-                with open(file_path, "r") as file:
-                    try:
-                        data = json.load(file)
+            # Open and dump the file
+            with open(file_path, "r") as file:
+                try:
+                    data = json.load(file)
 
-                        # Only publish if there's data in the file
-                        if data:
-                            for obj in data:
-                                json_data = json.dumps(obj).encode()
-                                future = publisher.publish(topic_path, json_data)
-                                future.add_done_callback(future_callback)
-                                future_list.append(future)
-                                count += 1
-                                if count % 50000 == 0:
-                                    print(count)
+                    # Only publish if there's data in the file
+                    if data:
+                        for obj in data:
+                            json_data = json.dumps(obj).encode()
+                            future = publisher.publish(topic_path, json_data)
+                            future.add_done_callback(future_callback)
+                            future_list.append(future)
+                            count += 1
+                            if count % 50000 == 0:
+                                print(count)
 
-                    except Exception as e:
-                        print(f"Error occured while loading json: {e}")
-                        exit(0)
+                except Exception as e:
+                    print(f"Error occured while loading json: {e}")
+                    exit(0)
 for future in futures.as_completed(future_list):
     continue
 print(f"Published messages to {topic_path}.")

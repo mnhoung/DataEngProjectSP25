@@ -11,21 +11,23 @@ OUTPUT_DIR = "/home/pjuyoung/recieved_data/"
 # Number of seconds the subscriber should listen for messages
 #TIMEOUT = 60.0
 COUNT = 0
+message_list = []
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     # print(f"Received {message}.")
     global COUNT
+    global message_list
     COUNT += 1
-    message_data = message.data.decode()
-    write_file_message_data)
+    message_data = message.data.decode()`
+    message_list.append(json.loads(message_data))
     message.ack()
 
 def write_file(message):
     timestamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime('%Y%m%d')
     filename = os.path.join(OUTPUT_DIR, f"recieved_data_{timestamp}.json")
 
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2)
+    with open(filename, "w") as file:
+        json.dump(data_list, file)
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
