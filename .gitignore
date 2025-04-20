@@ -1,1 +1,6 @@
 sp25-cs410-trimet-project-service-account.json
+env/
+venv/
+__pycache__/
+*.pyc
+*.log

@@ -26,7 +26,8 @@ def load_vehicle_ids(csv_path):
     return vehicle_ids
 
 # Directory to save output
-OUTPUT_DIR = f"./breadcrumb_data_/"
+timestamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime('%Y%m%d')
+OUTPUT_DIR = f"./breadcrumb_data_{timestamp}/"
 
 # Ensure output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)

@@ -31,7 +31,7 @@ def write_file(message_data):
     #global message_list
     timestamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime('%Y%m%d')
     filename = os.path.join(OUTPUT_DIR, f"recieved_data_{timestamp}.json")
-    #filename = os.path.join(OUTPUT_DIR, f"recieved_data_20250417.json")
+    #filename = os.path.join(OUTPUT_DIR, f"recieved_data_20250411.json")
 
     with open(filename, "a") as file:
         json.dump(json.loads(message_data), file)
@@ -56,11 +56,8 @@ def main():
             # streaming_pull_future.result(timeout=TIMEOUT)
             streaming_pull_future.result()
         except:
-            write_file()
             streaming_pull_future.cancel()  # Trigger the shutdown.
             streaming_pull_future.result()  # Block until the shutdown is complete.
-
-    write_file()
 
     print(f"{COUNT} messages received")
 

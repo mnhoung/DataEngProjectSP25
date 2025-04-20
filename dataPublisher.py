@@ -31,7 +31,7 @@ def main():
     count = 0
     timestamp = datetime.now(ZoneInfo("America/Los_Angeles"))
     folder_name = timestamp.strftime("breadcrumb_data_%Y%m%d")
-    #folder_name = "breadcrumb_data_20250417"
+    #folder_name = "breadcrumb_data_20250411"
     folder_path = os.path.join(BASE_DIR, folder_name)
 
     # Check if the folder exists
@@ -62,7 +62,7 @@ def main():
                         exit(0)
     for future in futures.as_completed(future_list):
         continue
-    print(f"Published messages to {topic_path}.")
+    print(f"Published {count} messages to {topic_path}.")
 
 if __name__ == "__main__":
     main()
