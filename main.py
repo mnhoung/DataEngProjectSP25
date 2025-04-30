@@ -21,7 +21,7 @@ def future_callback(future):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-def publish_data(data):
+def publish_data(data, vid):
     # Get a credential object from google.oauth2 using your service account file
     pubsub_creds =  (service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE))
 
@@ -31,22 +31,21 @@ def publish_data(data):
     future_list = []
     count = 0
     try:
-        # Only publish if there's data in the file
         for obj in data:
             json_data = json.dumps(obj).encode()
             future = publisher.publish(topic_path, json_data)
             future.add_done_callback(future_callback)
             future_list.append(future)
             count += 1
-            if count % 50000 == 0:
-                print(count)
+            #if count % 50000 == 0:
+            #    print(count)
 
     except Exception as e:
         print(f"Error occured while loading json: {e}")
         exit(0)
     for future in futures.as_completed(future_list):
         continue
-    print(f"Published {count} messages to {topic_path}.")
+    print(f"Vehicle {vid} published {count} messages to {topic_path}.")
 
 def load_vehicle_ids(csv_path):
     vehicle_ids = []
@@ -77,7 +76,7 @@ def main():
     for vid in vehicle_ids:
         data = fetch_breadcrumb_data(vid)
         if data:
-            publish_data(data)
+            publish_data(data, vid)
 
 if __name__ == "__main__":
     main()
