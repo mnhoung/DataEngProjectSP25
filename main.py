@@ -3,6 +3,7 @@ from google.oauth2 import service_account
 from concurrent import futures
 from urllib.request import urlopen
 import csv
+import json
 
 PROJECT_ID = "sp25-cs410-trimet-project"
 TOPIC_ID = "trimet-topic"
@@ -32,7 +33,7 @@ def publish_data(data):
     try:
         # Only publish if there's data in the file
         for obj in data:
-            json_data = obj.encode()
+            json_data = json.dumps(obj).encode()
             future = publisher.publish(topic_path, json_data)
             future.add_done_callback(future_callback)
             future_list.append(future)
@@ -65,7 +66,6 @@ def fetch_breadcrumb_data(vehicle_id):
         with urlopen(url) as response:
             charset = response.headers.get_content_charset() or 'utf-8'
             data = json.loads(response.read().decode(charset))
-            print(data[0])
             print(f"[✓] Saved data for vehicle {vehicle_id}")
             return data
 
@@ -76,7 +76,8 @@ def main():
     vehicle_ids = load_vehicle_ids(VEHICLE_ID_CSV)
     for vid in vehicle_ids:
         data = fetch_breadcrumb_data(vid)
-        publish_data(data)
+        if data:
+            publish_data(data)
 
 if __name__ == "__main__":
     main()
