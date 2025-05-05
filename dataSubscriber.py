@@ -6,6 +6,8 @@ from datetime import datetime
 import os
 import json
 
+#import dataLoadToDB as loadDB
+
 PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
 SERVICE_ACCOUNT_FILE = "/home/pjuyoung/term-project/sp25-cs410-trimet-project-service-account.json"
@@ -24,7 +26,8 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     message_data = message.data.decode()
 #    message_list.append(json.loads(message_data))
     if message_data:
-        write_file(message_data)
+        write_file(message_data)   # from project part 1
+#        load_to_db(message_data)
     message.ack()
 
 def write_file(message_data):
@@ -36,6 +39,15 @@ def write_file(message_data):
     with open(filename, "a") as file:
         json.dump(json.loads(message_data), file)
         file.write("\n")
+'''
+def load_to_db(message_data):
+#    json_data = json.loads(message_data)
+    conn = loadDB.db_connect()
+    json_data = loadDB.read_data(os.path.join(OUTPUT_DIR, f"recieved_data_20250502.json")) # for testing only
+    transformed_data = loadDB.transform_data(json_data)
+    cmd_list = get_sql_cmnds(transformed_data)
+    loadDB.load_to_db(conn, transformed_data, cmd_list)
+'''
 
 def main():
     # Ensure output directory exists
