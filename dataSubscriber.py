@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 from datetime import datetime
 import os
 import json
+import threading
 
-#import dataLoadToDB as loadDB
+#import dataLoadToDB as loadToDB
+
 
 PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
@@ -16,22 +18,27 @@ OUTPUT_DIR = "/home/pjuyoung/recieved_data/"
 # Number of seconds the subscriber should listen for messages
 #TIMEOUT = 60.0
 COUNT = 0
-#message_list = []
+message_list = []
+lock = threading.Lock()
+
+def start_timer():
+    print("Starting 20 minute timer...")
+    threading.Timer(1200, load_to_db).start()
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     # print(f"Received {message}.")
     global COUNT
-#    global message_list
+    global message_list
     COUNT += 1
     message_data = message.data.decode()
 #    message_list.append(json.loads(message_data))
     if message_data:
         write_file(message_data)   # from project part 1
-#        load_to_db(message_data)
+        with lock:
+            message_list.append(json.loads(message_data))
     message.ack()
 
 def write_file(message_data):
-    #global message_list
     timestamp = datetime.now(ZoneInfo("America/Los_Angeles")).strftime('%Y%m%d')
     filename = os.path.join(OUTPUT_DIR, f"recieved_data_{timestamp}.json")
     #filename = os.path.join(OUTPUT_DIR, f"recieved_data_20250411.json")
@@ -49,6 +56,15 @@ def load_to_db(message_data):
     loadDB.load_to_db(conn, transformed_data, cmd_list)
 '''
 
+def load_to_db():
+    global message_list
+    with lock:
+        if message_list:
+            print("Testing threading...")
+            print(message_list[0])
+        else:
+            print("Error testing thread, nothing was in the message_list")
+
 def main():
     # Ensure output directory exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -56,6 +72,8 @@ def main():
     pubsub_creds =  (service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE))
     subscriber = pubsub_v1.SubscriberClient(credentials=pubsub_creds)
     subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_ID)
+
+    start_timer()
 
     streaming_pull_future = subscriber.subscribe(subscription_path, callback=callback)
     print(f"Listening for messages on {subscription_path}..\n")

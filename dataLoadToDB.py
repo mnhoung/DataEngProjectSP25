@@ -3,20 +3,21 @@ import json
 from datetime import datetime, timedelta
 import pandas as pd
 
+DBNAME = 'postgres'
+DBUSR = 'postgres'
+DBPASS = 'asdf1234'
 
 def db_connect():
-    DBNAME = 'postgres'
-    DBUSR = 'postgres'
-    DBPASS = 'asdf1234'
     connection = psycopg2.connect(
         host="localhost",
         database=DBNAME,
         user=DBUSR,
         password=DBPASS,
-	)
-	connection.autocommit = True
-	return connection
+    )
+    connection.autocommit = True
+    return connection
 
+# for if we miss data
 def read_data(file_name):
     data_list = []
     with open(file_name, 'r') as file:
@@ -26,22 +27,29 @@ def read_data(file_name):
     return data_list
 
 def transform_data(data):
-    df = pd.DataFrame(data)
-    df = df.sort_values(by=['EVENT_NO_TRIP', 'EVENT_NO_STOP', 'ACT_TIME'])
-    df['OPD_DATE'] = datetime.strptime(df['OPD_DATE'], '%Y-%m-%d')
+    # turn the list to a pandas dataframe
+    df = pd.DataFrame(data)A
+
+    # sort the list by vehicle id, then trip, then stop then the act time
+    df = df.sort_values(by=['VEHICLE_ID', 'EVENT_NO_TRIP', 'EVENT_NO_STOP', 'ACT_TIME'])
+
+    # transform opd_date and act_time into a timestamp
+    df['OPD_DATE'] = datetime.strptime(df['OPD_DATE'], '%d%b%Y:%H:%M:%S')
     df['ACT_TIME'] = timedelta(seconds=int(df['ACT_TIME']))
 
     # caluclate the speed
-    df['PREV_METERS'] = df.groupby(['EVENT_NO_TRIP', 'EVENT_NO_STOP'])['METERS'].shift(1)
-    df['PREV_ACT_TIME'] = df.groupby(['EVENT_NO_TRIP', 'EVENT_NO_STOP'])['ACT_TIME'].shift(1)
+    df['PREV_METERS'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['METERS'].shift(1)
+    df['PREV_ACT_TIME'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['ACT_TIME'].shift(1)
     df['SPEED'] = (df['METERS'] - df['PREV_METERS']) / (df['ACT_TIME'] - df['PREV_ACT_TIME'])
     # for every bus on the same trip, fil in the first breadcrumb with the second
-    df['SPEED'] = df.groupby(['EVENT_NO_TRIP', 'EVENT_NO_STOP'])['SPEED'].apply(lambda x: x.fillna(method='bfill', limit=1))
+    df['SPEED'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['SPEED'].apply(lambda x: x.fillna(method='bfill', limit=1))
 
+'''
 def get_sql_cmd(data_list):
     cmd_list = []
     for row in data_list:
         valstr = 
+'''
 
 def load_to_db(conn, cmd_list):
     DATA_TABLE_NAME = 'breadcrumb'
@@ -60,7 +68,6 @@ def load_to_db(conn, cmd_list):
             cursor.execute(breadcrumb_sql, )
             cursor.execute(trip_sql, )
         '''
-        for cmd in cmd_list:
 
 
         elapsed = time.perf_counter() - start
