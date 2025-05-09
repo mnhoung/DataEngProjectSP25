@@ -54,7 +54,7 @@ def load_to_db():
             print("test")
             # Uncomment this when ready to send to the database
 #            load = LoadToDB()
-#           load.run(message_list)
+#            load.run(message_list)
 
 def main():
     # Ensure output directory exists
