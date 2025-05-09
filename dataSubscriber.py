@@ -6,9 +6,8 @@ from datetime import datetime
 import os
 import json
 import threading
-
-# Uncomment this when ready to send to database
-#from dataLoadToDB import LoadToDB
+import pandas as pd
+from dataLoadToDB import LoadToDB
 
 PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
@@ -31,7 +30,7 @@ def callback(message: pubsub_v1.subscriber.message.Message) -> None:
     global message_list
     COUNT += 1
     message_data = message.data.decode()
-#    message_list.append(json.loads(message_data))
+    # message_list.append(json.loads(message_data))
     if message_data:
         write_file(message_data)
         with lock:
@@ -51,10 +50,13 @@ def load_to_db():
     global message_list
     with lock:
         if message_list:
-            print("test")
-            # Uncomment this when ready to send to the database
-#            load = LoadToDB()
-#            load.run(message_list)
+            print("Starting data load...")
+            # Convert messages to DataFrame
+            df = pd.DataFrame(message_list)
+            
+            # Run the pipeline
+            loader = LoadToDB()
+            loader.run(df)
 
 def main():
     # Ensure output directory exists
