@@ -13,7 +13,7 @@ class LoadToDB:
     def __init__(self):
         self.dbname = 'postgres'
         self.dbuser = 'postgres'
-        self.dfpass = 'asdf1234'
+        self.dbpass = 'asdf1234'
         self.breadcrumb_table_name = 'breadcrumb'
         self.trip_table_name = 'trip'
         self.conn = None
@@ -99,7 +99,7 @@ class LoadToDB:
         df['SPEED'] = df['DELTA_METERS'] / df['DELTA_SECONDS']
         
         # backfill the first breadcrumb
-        df['SPEED'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['SPEED'].fillna(method='bfill', limit=1)
+        df['SPEED'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['SPEED'].bfill(limit=1)
         return df
     
 
@@ -117,7 +117,7 @@ class LoadToDB:
         """
         for _, row in trip_records.iterrows():
             cursor.execute(trip_insert_query, (
-                row['EVENT_NO_TRIP'], None, row['VEHICLE_ID'], None, None))
+                int(row['EVENT_NO_TRIP']), None, int(row['VEHICLE_ID']), None, None))
 
         # breadcrumb table
         breadcrumb_insert_query = f"""
@@ -127,7 +127,7 @@ class LoadToDB:
         """
         for _, row in df.iterrows():
             cursor.execute(breadcrumb_insert_query, (
-                row['tstamp'], row['GPS_LATITUDE'], row['GPS_LONGITUDE'], row['SPEED'], row['EVENT_NO_TRIP']))
+                row['tstamp'].to_pydatetime(), float(row['GPS_LATITUDE']), float(row['GPS_LONGITUDE']), float(row['SPEED']), int(row['EVENT_NO_TRIP'])))
         cursor.close()
 
 
