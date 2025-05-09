@@ -1,6 +1,4 @@
 import psycopg2
-import json
-from datetime import datetime, timedelta
 import pandas as pd
 
 '''
@@ -20,7 +18,8 @@ class LoadToDB:
         self.trip_table_name = 'trip'
         self.conn = None
 
-    def db_connect():
+
+    def db_connect(self):
         self.conn = psycopg2.connect(
             host="localhost",
             database=self.dbname,
@@ -28,58 +27,111 @@ class LoadToDB:
             password=self.dbpass,
         )
         self.conn.autocommit = True
-        return self.conn
+    
+    
+    def validate_data(self, df):
+        df = df.copy()
+        invalid_indices = set()
+        
+        # Existence - check required fields are not null
+        required_cols = ['VEHICLE_ID', 'EVENT_NO_TRIP', 'ACT_TIME', 'OPD_DATE', 'GPS_LATITUDE', 'GPS_LONGITUDE']
+        for col in required_cols:
+            df = df[df[col].notnull()]
 
-    # for if we miss data
-    def read_data(file_name):
-        data_list = []
-        with open(file_name, 'r') as file:
-            for line in file:
-                data = json.loads(line.strip())
-                data_list.append(data)
-        return data_list
+        # Limit - convert fields to numbers
+        df['GPS_LATITUDE'] = pd.to_numeric(df['GPS_LATITUDE'], errors='coerce')
+        df['GPS_LONGITUDE'] = pd.to_numeric(df['GPS_LONGITUDE'], errors='coerce')
+        df['METERS'] = pd.to_numeric(df['METERS'], errors='coerce')
+        df['GPS_SATELLITES'] = pd.to_numeric(df['GPS_SATELLITES'], errors='coerce')
+        df['ACT_TIME'] = pd.to_numeric(df['ACT_TIME'], errors='coerce')
+        df['GPS_HDOP'] = pd.to_numeric(df['GPS_HDOP'], errors='coerce')
+        invalid_indices.update(df[(df['GPS_LATITUDE'] < 45) | (df['GPS_LATITUDE'] > 46)].index)
+        invalid_indices.update(df[(df['GPS_LONGITUDE'] < -123) | (df['GPS_LONGITUDE'] > -122)].index)
+        invalid_indices.update(df[(df['GPS_SATELLITES'] < 3) | (df['GPS_SATELLITES'] > 31)].index)
+        invalid_indices.update(df[(df['ACT_TIME'] > 86400)].index)
 
-    def transform_data(data):
-        # turn the list to a pandas dataframe
-        df = pd.DataFrame(data)A
+        # Intra-record - cannot compute HDOP with knowing number of satellites
+        invalid_indices.update(df[(df['GPS_SATELLITES'].isna()) & (df['GPS_HDOP'].notna())].index)
+        
+        # Referential integrity - remove all rows that share the same timestamp for the same vehicle and date 
+        duplicates = df.duplicated(subset=['VEHICLE_ID', 'OPD_DATE', 'ACT_TIME'], keep=False)
+        invalid_indices.update(df[duplicates].index)
 
-        # sort the list by vehicle id, then trip, then stop then the act time
-        df = df.sort_values(by=['VEHICLE_ID', 'EVENT_NO_TRIP', 'EVENT_NO_STOP', 'ACT_TIME'])
-
-        # transform opd_date and act_time into a timestamp
-        df['OPD_DATE'] = datetime.strptime(df['OPD_DATE'], '%d%b%Y:%H:%M:%S')
-        df['ACT_TIME'] = timedelta(seconds=int(df['ACT_TIME']))
-
-        # caluclate the speed
-        df['PREV_METERS'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['METERS'].shift(1)
-        df['PREV_ACT_TIME'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['ACT_TIME'].shift(1)
-        df['SPEED'] = (df['METERS'] - df['PREV_METERS']) / (df['ACT_TIME'] - df['PREV_ACT_TIME'])
-        # for every bus on the same trip, fil in the first breadcrumb with the second
-        df['SPEED'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['SPEED'].apply(lambda x: x.fillna(method='bfill', limit=1))
-
-    def load_to_db(data_list):
-        with self.conn.cursor() as cursor:
-            print(f"Loading {len(sql_cmd_list)} rows")
-            start = time.perf_counter()
+        # Drop invalid rows
+        if invalid_indices:
+            print(f"Dropping {len(invalid_indices)} invalid rows during validation.")
+            df = df.drop(index=invalid_indices)
             
-            '''
-            for data in cmd_list:
-                breadcrumb_sql = f"INSERT INTO {DATA_TABLE_NAME} (tstamp, latitude, longitude, speed, trip_id)
-                VALUES ({%s, %s, %s, %s, %s);"
-                trip_sql = f"INSERT INTO {TRIP_TABLE_NAME} (trip_id, route_id, vehicle_id, service_key, direction)
-                VALUES ({%s, %s, %s, %s, %s);"
-                cursor.execute(breadcrumb_sql, )
-                cursor.execute(trip_sql, )
-            '''
+        # Statistical
+        mean_hdop = df['GPS_HDOP'].mean()
+        if mean_hdop > 5:
+            print(f"Warning: High average GPS_HDOP: {mean_hdop:.2f}")
+
+        return df
 
 
-            elapsed = time.perf_counter() - start
-            print(f'Finished Loading. Elapsed Time: {elapsed:0.4} seconds')
+    def transform_data(self, df):
+        df = df.copy()
+        
+        # transform opd_date and act_time into a timestamp
+        df['OPD_DATE'] = pd.to_datetime(df['OPD_DATE'], format='%d%b%Y:%H:%M:%S')
+        df['ACT_TIME'] = pd.to_timedelta(df['ACT_TIME'], unit='s')
+        df['tstamp'] = df['OPD_DATE'] + df['ACT_TIME']
+        
+        df = df.sort_values(by=['VEHICLE_ID', 'EVENT_NO_TRIP', 'tstamp'])
+        
+        # Inter-record validation - time should increase within a trip
+        invalid_indices = set()
+        for (vehicle_id, trip_id), group in df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP']):
+            timestamps = group['tstamp'].values
+            for i in range(1, len(timestamps)):
+                if timestamps[i] <= timestamps[i - 1]:
+                    invalid_indices.add(group.index[i])
 
-    def run(data_list):
-        # validate data NOT IMPLEMENTED YET
-        #validate_data = validate_data(data_list)
-        # transform data HALF IMPLEMENTED
-        transformed_data = transform_data(validate_data)
-        # send to database
-        load_to_db(transformed_data)
+        if invalid_indices:
+            df = df.drop(index=invalid_indices)
+
+        # calculate the speed
+        df['PREV_METERS'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['METERS'].shift(1)
+        df['PREV_TIME'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['tstamp'].shift(1)
+        df['DELTA_METERS'] = df['METERS'] - df['PREV_METERS']
+        df['DELTA_SECONDS'] = (df['tstamp'] - df['PREV_TIME']).dt.total_seconds()
+        df['SPEED'] = df['DELTA_METERS'] / df['DELTA_SECONDS']
+        
+        # backfill the first breadcrumb
+        df['SPEED'] = df.groupby(['VEHICLE_ID', 'EVENT_NO_TRIP'])['SPEED'].fillna(method='bfill', limit=1)
+        return df
+    
+
+    def load_to_db(self, df):
+        self.db_connect()
+        cursor = self.conn.cursor()
+        
+        # trip table
+        trip_records = df[['EVENT_NO_TRIP', 'VEHICLE_ID']].drop_duplicates()
+
+        trip_insert_query = f"""
+            INSERT INTO {self.trip_table_name} (trip_id, route_id, vehicle_id, service_key, direction)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (trip_id) DO NOTHING
+        """
+        for _, row in trip_records.iterrows():
+            cursor.execute(trip_insert_query, (
+                row['EVENT_NO_TRIP'], None, row['VEHICLE_ID'], None, None))
+
+        # breadcrumb table
+        breadcrumb_insert_query = f"""
+            INSERT INTO {self.breadcrumb_table_name}
+            (tstamp, latitude, longitude, speed, trip_id)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        for _, row in df.iterrows():
+            cursor.execute(breadcrumb_insert_query, (
+                row['tstamp'], row['GPS_LATITUDE'], row['GPS_LONGITUDE'], row['SPEED'], row['EVENT_NO_TRIP']))
+        cursor.close()
+
+
+    def run(self, df):
+        validated_df = self.validate_data(df)
+        transformed_df = self.transform_data(validated_df)
+        self.load_to_db(transformed_df)
