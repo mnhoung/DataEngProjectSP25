@@ -130,6 +130,9 @@ class LoadToDB:
                 row['tstamp'].to_pydatetime(), float(row['GPS_LATITUDE']), float(row['GPS_LONGITUDE']), float(row['SPEED']), int(row['EVENT_NO_TRIP'])))
         cursor.close()
 
+        print(f'Loaded {len(trip_records)} records to trip table')
+        print(f'Loaded {len(df)} records to breadcrumb table')
+
 
     def run(self, df):
         validated_df = self.validate_data(df)
