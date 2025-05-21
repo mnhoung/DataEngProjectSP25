@@ -13,6 +13,7 @@ PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
 SERVICE_ACCOUNT_FILE = "/home/pjuyoung/term-project/sp25-cs410-trimet-project-service-account.json"
 OUTPUT_DIR = "/home/pjuyoung/recieved_data/"
+BATCH_SIZE = 10000
 
 # Number of seconds the subscriber should listen for messages
 #TIMEOUT = 60.0
@@ -22,19 +23,19 @@ lock = threading.Lock()
 
 def start_timer():
     print("Starting 20 minute timer...")
-    threading.Timer(1200, load_to_db).start()
+    threading.Timer(1200, lambda: load_to_db(triggered_by_timer=True)).start()
 
 def callback(message: pubsub_v1.subscriber.message.Message) -> None:
-    # print(f"Received {message}.")
     global COUNT
     global message_list
     COUNT += 1
     message_data = message.data.decode()
-    # message_list.append(json.loads(message_data))
     if message_data:
         write_file(message_data)
         with lock:
             message_list.append(json.loads(message_data))
+            if len(message_list) >= BATCH_SIZE:
+                load_to_db()
     message.ack()
 
 def write_file(message_data):
@@ -46,17 +47,16 @@ def write_file(message_data):
         json.dump(json.loads(message_data), file)
         file.write("\n")
 
-def load_to_db():
+def load_to_db(triggered_by_timer=False):
     global message_list
     with lock:
         if message_list:
-            print("Starting data load...")
-            # Convert messages to DataFrame
             df = pd.DataFrame(message_list)
-            
-            # Run the pipeline
             loader = LoadToDB()
             loader.run(df)
+            message_list = []
+    if triggered_by_timer:
+        start_timer()
 
 def main():
     # Ensure output directory exists
@@ -81,6 +81,8 @@ def main():
         except:
             streaming_pull_future.cancel()  # Trigger the shutdown.
             streaming_pull_future.result()  # Block until the shutdown is complete.
+        finally:
+            load_to_db()
 
     print(f"{COUNT} messages received")
 
