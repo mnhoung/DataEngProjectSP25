@@ -8,6 +8,9 @@ import json
 import threading
 import pandas as pd
 from dataLoadToDB import LoadToDB
+import signal
+import atexit
+import sys
 
 PROJECT_ID = "sp25-cs410-trimet-project"
 SUBSCRIPTION_ID = "trimet-topic-sub"
@@ -20,6 +23,16 @@ BATCH_SIZE = 10000
 COUNT = 0
 message_list = []
 lock = threading.Lock()
+
+def graceful_shutdown(sig=None, frame=None):
+    print("\n[Shutdown] Signal received. Flushing remaining messages to DB...")
+    load_to_db(triggered_by_timer=True)
+    sys.exit(0)
+
+# Register this function to handle termination
+atexit.register(graceful_shutdown)
+signal.signal(signal.SIGINT, graceful_shutdown)   # Ctrl+C
+signal.signal(signal.SIGTERM, graceful_shutdown)  # VM shutdown or kill
 
 def start_timer():
     print("Starting 20 minute timer...")
