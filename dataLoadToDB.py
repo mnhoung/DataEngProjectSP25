@@ -12,7 +12,6 @@ class LoadToDB:
         self.dbuser = 'postgres'
         self.dbpass = os.getenv("DBPASS")
         self.breadcrumb_table_name = 'breadcrumb'
-        self.trip_table_name = 'trip'
         self.conn = None
 
     def db_connect(self):
@@ -178,18 +177,7 @@ class LoadToDB:
     def load_to_db(self, df):
         self.db_connect()
         cursor = self.conn.cursor()
-        
-        # trip table
-        trip_csv = io.StringIO()
-        trip_records = df[['EVENT_NO_TRIP', 'VEHICLE_ID']].drop_duplicates()
-        trip_records['route_id'] = None
-        trip_records['service_key'] = None
-        trip_records['direction'] = None
-        trip_records[['EVENT_NO_TRIP', 'route_id', 'VEHICLE_ID', 'service_key', 'direction']].to_csv(trip_csv, index=False, header=False)
-        trip_csv.seek(0)
-        cursor.copy_from(trip_csv, self.trip_table_name, sep=",")
 
-        # breadcrumb table
         breadcrumb_csv = io.StringIO()
         df[['tstamp', 'GPS_LATITUDE', 'GPS_LONGITUDE', 'SPEED', 'EVENT_NO_TRIP']].to_csv(
             breadcrumb_csv, index=False, header=False)
@@ -197,8 +185,6 @@ class LoadToDB:
         cursor.copy_from(breadcrumb_csv, self.breadcrumb_table_name, sep=",")
         
         cursor.close()
-
-        print(f'Loaded {len(trip_records)} records to trip table')
         print(f'Loaded {len(df)} records to breadcrumb table')
 
 
